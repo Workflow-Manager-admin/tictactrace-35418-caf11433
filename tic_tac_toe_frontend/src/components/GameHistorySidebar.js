@@ -13,17 +13,31 @@ function GameHistorySidebar({ history, onSelectGame }) {
       <div className="sidebar-title">Game History</div>
       <ul className="history-list">
         {history.length === 0 ? (
-          <li className="history-item" style={{ color: 'var(--text-secondary)' }}>No game history yet.</li>
+          <li
+            className="history-item"
+            style={{ color: 'var(--text-secondary)' }}
+            role="status"
+            aria-live="polite"
+            tabIndex={0}
+          >
+            No game history yet.
+          </li>
         ) : (
           history.map((game, idx) => (
             <li
               key={idx}
               className="history-item"
-              style={{ cursor: 'pointer' }}
+              style={{
+                cursor: 'pointer',
+                outline: 'none',
+                boxShadow: 'none'
+              }}
               onClick={() => onSelectGame(game)}
               tabIndex={0}
               aria-label={`Game vs ${game.opponent}, ${game.result}`}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelectGame(game); }}
+              onFocus={e => e.target.style.boxShadow = '0 0 0 2.5px var(--primary)'}
+              onBlur={e => e.target.style.boxShadow = 'none'}
             >
               <b style={{ color: game.result === 'Win' ? 'var(--brand-accent)' : (game.result === 'Loss' ? 'var(--accent)' : 'var(--primary)') }}>
                 {game.result}

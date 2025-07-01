@@ -224,24 +224,154 @@ function App() {
         <LoginSignup onLogin={handleLogin} />
       )}
       {view === 'lobby' && (
-        <Lobby
-          games={loadingGames ? [] : games}
-          joinGame={handleJoinGame}
-          createGame={handleCreateGame}
-          username={username}
-        />
+        <div>
+          {/* Games & history loading overlays */}
+          {loadingGames && (
+            <div
+              style={{
+                position: 'fixed',
+                left: 0,
+                top: 0,
+                width: '100vw',
+                height: '100vh',
+                background: 'rgba(33, 150, 243, 0.14)',
+                color: 'var(--brand-accent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 15,
+                fontSize: '1.1em',
+                fontWeight: 600,
+                letterSpacing: '1px'
+              }}
+              aria-busy="true"
+              aria-live="polite"
+              role="status"
+              tabIndex={0}
+            >
+              Loading available games...
+            </div>
+          )}
+          {gamesError && (
+            <div
+              style={{
+                padding: '6px 20px',
+                color: 'var(--accent)',
+                background: 'rgba(255,87,34,0.10)',
+                fontWeight: 600,
+                borderRadius: 9,
+                margin: '16px auto',
+                textAlign: 'center',
+                maxWidth: 450
+              }}
+              role="alert"
+              aria-live="assertive"
+              tabIndex={0}
+            >
+              {gamesError}
+            </div>
+          )}
+          <Lobby
+            games={games}
+            joinGame={handleJoinGame}
+            createGame={handleCreateGame}
+            username={username}
+          />
+          {loadingHistory && (
+            <div
+              style={{
+                position: 'fixed',
+                left: 0,
+                bottom: 0,
+                width: '100vw',
+                textAlign: 'center',
+                color: 'var(--primary)',
+                fontSize: '0.94em',
+                zIndex: 9,
+              }}
+              aria-busy="true"
+              aria-live="polite"
+            >
+              <span>Loading your game history...</span>
+            </div>
+          )}
+          {historyError && (
+            <div
+              style={{
+                color: 'var(--accent)',
+                fontWeight: 500,
+                margin: '10px auto',
+                textAlign: 'center',
+                background: 'rgba(255,87,34,0.08)',
+                borderRadius: 8,
+                maxWidth: 390
+              }}
+              role="alert"
+              aria-live="assertive"
+              tabIndex={0}
+            >
+              {historyError}
+            </div>
+          )}
+        </div>
       )}
       {view === 'game' && (
-        <div className="main-container">
+        <div className="main-container" style={{ position: 'relative' }}>
+          {/* Overlay loader for waiting actions */}
+          {waiting && (
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                width: '100%',
+                height: '100%',
+                background: 'rgba(33,150,243,0.11)',
+                display: 'flex',
+                zIndex: 18,
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.27em',
+                color: 'var(--brand-accent)',
+                fontWeight: 700,
+                pointerEvents: 'auto'
+              }}
+              aria-busy="true"
+              tabIndex={0}
+            >
+              <span>Working...</span>
+            </div>
+          )}
           <div className="central-content">
             <div className="players-row">
-              <div className={`player-info${currentPlayer === yourSymbol ? ' active' : ''}`}>
+              <div
+                className={`player-info${currentPlayer === yourSymbol ? ' active' : ''}${waiting ? ' disabled' : ''}`}
+                aria-label="You"
+                tabIndex={0}
+              >
                 <span className="player-avatar">{yourSymbol === 'X' ? '❌' : '⭕'}</span>
                 <span className="player-name">{username} (You)</span>
+                {currentPlayer === yourSymbol && !gameOver &&
+                  <span style={{
+                    marginLeft: 8,
+                    color: 'var(--brand-accent)',
+                    fontWeight: 600,
+                    fontSize: '0.92em'
+                  }}>(Turn)</span>}
               </div>
-              <div className={`player-info${currentPlayer !== yourSymbol ? ' active' : ''}`}>
+              <div
+                className={`player-info${currentPlayer !== yourSymbol ? ' active' : ''}`}
+                aria-label="Opponent"
+                tabIndex={0}
+              >
                 <span className="player-avatar">{yourSymbol === 'X' ? '⭕' : '❌'}</span>
-                <span className="player-name">{opponent}</span>
+                <span className="player-name">{opponent || "..."}</span>
+                {currentPlayer !== yourSymbol && !gameOver &&
+                  <span style={{
+                    marginLeft: 7,
+                    color: 'var(--text-secondary)',
+                    fontSize: '0.91em'
+                  }}>(Turn)</span>}
               </div>
             </div>
             <GameBoard
@@ -251,10 +381,42 @@ function App() {
               currentPlayer={currentPlayer || 'X'}
               yourSymbol={yourSymbol || 'X'}
             />
-            {moveError && <div style={{ color: 'var(--accent)', marginTop: 8 }}>{moveError}</div>}
-            <div className="action-buttons">
-              <button className="btn" onClick={handleRematch} disabled={waiting}>Reset Board</button>
-              <button className="btn" onClick={goToLobby} disabled={waiting}>Lobby</button>
+            {moveError && (
+              <div
+                style={{
+                  color: 'var(--accent)',
+                  marginTop: 8,
+                  background: 'rgba(255,87,34,0.09)',
+                  padding: '5px 17px',
+                  borderRadius: 8,
+                  fontWeight: 500
+                }}
+                role="alert"
+                aria-live="assertive"
+                tabIndex={0}
+              >
+                {moveError}
+              </div>
+            )}
+            <div className="action-buttons" style={{ opacity: waiting ? 0.68 : 1 }}>
+              <button
+                className="btn"
+                onClick={handleRematch}
+                disabled={waiting}
+                aria-disabled={waiting}
+                style={{ opacity: waiting ? 0.65 : 1 }}
+              >
+                Reset Board
+              </button>
+              <button
+                className="btn"
+                onClick={goToLobby}
+                disabled={waiting}
+                aria-disabled={waiting}
+                style={{ opacity: waiting ? 0.65 : 1 }}
+              >
+                Lobby
+              </button>
             </div>
           </div>
           <GameHistorySidebar history={history} onSelectGame={handleSelectHistory} />

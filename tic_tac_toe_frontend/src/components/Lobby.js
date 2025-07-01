@@ -37,6 +37,7 @@ function Lobby({ games, joinGame, createGame, username }) {
           <input
             type="text"
             placeholder="Game room name"
+            aria-label="Game room name"
             value={newGameName}
             onChange={e => setNewGameName(e.target.value)}
             style={{
@@ -46,22 +47,23 @@ function Lobby({ games, joinGame, createGame, username }) {
               fontSize: '0.96rem',
               flex: 1
             }}
+            tabIndex={0}
           />
-          <button className="btn primary" type="submit">New Game</button>
+          <button className="btn primary" type="submit" aria-label="Create new game room">New Game</button>
         </form>
         <div style={{ marginBottom: 8, marginTop: 7, color: 'var(--primary)', fontWeight: 600 }}>
           Available Games
         </div>
         <ul className="history-list" style={{ maxHeight: 210, overflowY: 'auto', minHeight: 35 }}>
           {games.length === 0 ?
-            <li className="history-item" style={{ color: 'var(--text-secondary)' }}>No games available</li> :
+            <li className="history-item" style={{ color: 'var(--text-secondary)' }} role="status" aria-live="polite">No games available</li> :
             games.map(g => (
               <li key={g.id} className="history-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>
                   <span style={{ color: 'var(--accent)' }}>{g.name}</span> &nbsp;
                   <span style={{ fontSize: '0.95em', color: 'var(--brand-accent)' }}>by {g.host}</span>
                 </span>
-                <button className="btn" onClick={() => joinGame(g.id)} style={{ padding: '5px 13px', fontSize: '0.97em' }}>Join</button>
+                <button className="btn" onClick={() => joinGame(g.id)} aria-label={`Join game ${g.name}`} style={{ padding: '5px 13px', fontSize: '0.97em' }}>Join</button>
               </li>
             ))
           }

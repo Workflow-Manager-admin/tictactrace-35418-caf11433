@@ -37,6 +37,7 @@ function LoginSignup({ onLogin }) {
           <input
             type="text"
             placeholder="Enter username"
+            aria-label="Username"
             value={username}
             autoFocus
             onChange={e => setUsername(e.target.value)}
@@ -47,8 +48,11 @@ function LoginSignup({ onLogin }) {
               fontSize: '1.07rem',
               outline: 'none'
             }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') e.target.blur();
+            }}
           />
-          {error && <div style={{ color: 'var(--accent)', fontSize: '0.97em' }}>{error}</div>}
+          {error && <div role="alert" aria-live="assertive" tabIndex={0} style={{ color: 'var(--accent)', fontSize: '0.97em' }}>{error}</div>}
           <button className="btn primary" type="submit" style={{ width: '100%' }}>
             {isSignup ? 'Sign Up' : 'Login'}
           </button>

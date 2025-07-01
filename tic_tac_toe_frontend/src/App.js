@@ -1,132 +1,212 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './App.css';
-
-// Import modular feature components
 import LoginSignup from './components/LoginSignup';
 import Lobby from './components/Lobby';
 import GameBoard from './components/GameBoard';
 import GameOverScreen from './components/GameOverScreen';
 import GameHistorySidebar from './components/GameHistorySidebar';
+import * as api from './helpers/api';
 
-
-
-/**
- * Application shell for Tic Tac Toe frontend.
- * Now uses modular components: LoginSignup, Lobby, GameBoard, GameOverScreen, GameHistorySidebar
- */
 function App() {
-  // App-level view state
   const [theme, setTheme] = useState('light');
+  const [view, setView] = useState('login');
   const [username, setUsername] = useState(null);
-  const [view, setView] = useState('login'); // 'login', 'lobby', 'game', 'gameover'
-  const [games, setGames] = useState([
-    // Demo game lobbies
-    { id: 1, name: "Room123", host: "Alice", status: "waiting" },
-    { id: 2, name: "ProTic", host: "Bob", status: "in_progress" }
-  ]);
-  const [yourSymbol, setYourSymbol] = useState("X");
-  const [opponent, setOpponent] = useState("Bob");
-  const [board, setBoard] = useState([
-    [null, 'X', 'O'],
-    ['O', 'X', null],
-    [null, null, 'X']
-  ]);
-  const [currentPlayer, setCurrentPlayer] = useState("X");
+  const [games, setGames] = useState([]);
+  const [loadingGames, setLoadingGames] = useState(false);
+  const [gamesError, setGamesError] = useState('');
+
+  const [gameId, setGameId] = useState(null);
+  const [yourSymbol, setYourSymbol] = useState(null);
+  const [opponent, setOpponent] = useState('');
+  const [board, setBoard] = useState(null);
+  const [currentPlayer, setCurrentPlayer] = useState(null);
   const [gameOver, setGameOver] = useState(false);
-  const [winner, setWinner] = useState(null); // "X" or "O"
+  const [winner, setWinner] = useState(null);
   const [isDraw, setIsDraw] = useState(false);
 
-  // Demo history for sidebar
-  const [history, setHistory] = useState([
-    { opponent: "Alice", result: "Win", date: "2024-04-01" },
-    { opponent: "Bob", result: "Draw", date: "2024-04-02" },
-    { opponent: "Carol", result: "Loss", date: "2024-04-03" },
-  ]);
+  const [history, setHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+
+  const [moveError, setMoveError] = useState('');
+  const [waiting, setWaiting] = useState(false);
+
+  const wsCloseRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // Fetch game lobbies on lobby view
+  useEffect(() => {
+    if (view === 'lobby' && username) {
+      setLoadingGames(true);
+      setGamesError('');
+      api.fetchAvailableGames()
+        .then(res => setGames(res.games || res))
+        .catch(e => setGamesError(e.message || 'Failed to fetch games'))
+        .finally(() => setLoadingGames(false));
+      setLoadingHistory(true);
+      api.fetchGameHistory(username)
+        .then(hist => setHistory(hist.history || hist))
+        .catch(e => setHistoryError(e.message || 'Failed to fetch history'))
+        .finally(() => setLoadingHistory(false));
+    }
+  }, [view, username]);
+
+  // Clean up WebSocket if game ends or leaves
+  useEffect(() => {
+    return () => {
+      if (wsCloseRef.current) wsCloseRef.current();
+      wsCloseRef.current = null;
+    };
+  }, [gameId, view]);
+
   // Handler: Theme toggle
-  const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
-  };
+  const toggleTheme = () => setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
 
   // Handler: On login/signup
-  const handleLogin = (uname) => {
-    setUsername(uname);
-    setView('lobby');
-  };
-
-  // Handler: Create new game
-  const handleCreateGame = (roomName) => {
-    const newId = Math.floor(Math.random() * 99999);
-    setGames(g => [...g, { id: newId, name: roomName, host: username, status: "waiting" }]);
-    setView('game');
-    setYourSymbol("X");
-    setOpponent("Awaiting Opponent");
-    setBoard([
-      [null, null, null],
-      [null, null, null],
-      [null, null, null]
-    ]);
-    setCurrentPlayer("X");
-    setGameOver(false); setWinner(null); setIsDraw(false);
-  };
-
-  // Handler: Join game
-  const handleJoinGame = (gameId) => {
-    setView('game');
-    setYourSymbol("O");
-    const g = games.find(game => game.id === gameId);
-    setOpponent(g ? g.host : "X-player");
-    setBoard([
-      [null, null, null],
-      [null, null, null],
-      [null, null, null]
-    ]);
-    setCurrentPlayer("X");
-    setGameOver(false); setWinner(null); setIsDraw(false);
-  };
-
-  // Handler: Move input (for demo only)
-  const handleMove = (i, j) => {
-    if (gameOver || board[i][j]) return;
-    const newBoard = board.map(row => row.slice());
-    newBoard[i][j] = currentPlayer;
-    setBoard(newBoard);
-    // fake rules for demo: next player, set gameOver if full
-    const nextPlayer = currentPlayer === "X" ? "O" : "X";
-    setCurrentPlayer(nextPlayer);
-    if (newBoard.flat().filter(Boolean).length >= 5) {
-      setGameOver(true);
-      // fake outcome for demo
-      setWinner(currentPlayer);
+  const handleLogin = async (uname) => {
+    try {
+      await api.loginOrSignup(uname, false);
+      setUsername(uname);
+      setView('lobby');
+    } catch (e) {
+      window.alert('Login failed: ' + e.message);
     }
   };
 
-  // Handler: Go to Lobby
-  const goToLobby = () => setView('lobby');
+  // Handler: Create new game
+  const handleCreateGame = async (roomName) => {
+    setWaiting(true);
+    try {
+      const result = await api.createGame(username, roomName);
+      setGameId(result.game_id || result.id || result.gameId);
+      setYourSymbol("X");
+      setOpponent('Awaiting Opponent');
+      setBoard(result.board || [
+        [null, null, null],
+        [null, null, null],
+        [null, null, null]
+      ]);
+      setCurrentPlayer("X");
+      setGameOver(false); setWinner(null); setIsDraw(false);
+      setView('game');
+      setWaiting(false);
+      setupRealtime(result.game_id || result.id || result.gameId, "X");
+    } catch (e) {
+      window.alert("Failed to create game: " + e.message);
+      setWaiting(false);
+    }
+  };
 
-  // Handler: New Game from Game Over
-  const handleRematch = () => {
-    setBoard([
-      [null, null, null],
-      [null, null, null],
-      [null, null, null]
-    ]);
-    setCurrentPlayer("X");
+  // Handler: Join game
+  const handleJoinGame = async (gameToJoin) => {
+    setWaiting(true);
+    try {
+      const chosenId = typeof gameToJoin === "object" ? gameToJoin.id : gameToJoin;
+      const result = await api.joinGame(username, chosenId);
+      setGameId(chosenId);
+      setYourSymbol("O");
+      setOpponent(result.host || result.opponent || 'X-player');
+      setBoard(result.board || [
+        [null, null, null],
+        [null, null, null],
+        [null, null, null]
+      ]);
+      setCurrentPlayer("X");
+      setGameOver(false); setWinner(null); setIsDraw(false);
+      setView('game');
+      setWaiting(false);
+      setupRealtime(chosenId, "O");
+    } catch (e) {
+      window.alert("Failed to join game: " + e.message);
+      setWaiting(false);
+    }
+  };
+
+  // Handler: Make a move
+  const handleMove = async (i, j) => {
+    setMoveError('');
+    if (gameOver || !board || board[i][j] || currentPlayer !== yourSymbol || waiting) return;
+    setWaiting(true);
+    try {
+      const res = await api.submitMove(gameId, username, i, j);
+      // If using WebSocket, board will update there; fallback: update manually
+      if (!res.fromWebSocket) {
+        if (res.board) setBoard(res.board);
+        if (typeof res.currentPlayer !== "undefined") setCurrentPlayer(res.currentPlayer);
+        if (typeof res.winner !== "undefined") setWinner(res.winner);
+        if (typeof res.isDraw !== "undefined") setIsDraw(res.isDraw);
+        setGameOver(res.isDraw || !!res.winner);
+      }
+      setWaiting(false);
+    } catch (e) {
+      setMoveError(e.message || "Move failed");
+      setWaiting(false);
+    }
+  };
+
+  // Handler: Go to Lobby (ends live updates)
+  const goToLobby = () => {
+    setView('lobby');
+    setGameId(null);
+    setYourSymbol(null);
+    setOpponent('');
+    setBoard(null);
+    setCurrentPlayer(null);
     setGameOver(false);
     setWinner(null);
     setIsDraw(false);
-    setView('game');
+    if (wsCloseRef.current) wsCloseRef.current();
+    wsCloseRef.current = null;
   };
 
-  // Handler: Select game in history (no-op demo)
-  const handleSelectHistory = (game) => {
-    // could show a modal with moves
-    alert(`Viewing game: ${game.result} vs ${game.opponent} (${game.date})`);
+  // Handler: New Game from Game Over (rematch: just go to lobby, can extend for true rematch)
+  const handleRematch = () => {
+    goToLobby();
   };
+
+  // Handler: Select game in history to see details or replay (optional)
+  const handleSelectHistory = useCallback((game) => {
+    window.alert(`Viewing game vs ${game.opponent}, result: ${game.result}, on ${game.date}`);
+  }, []);
+
+  // Setup WebSocket for real-time updates to board/game
+  const setupRealtime = useCallback((id, symbol) => {
+    if (wsCloseRef.current) wsCloseRef.current();
+    wsCloseRef.current = api.subscribeToGame(
+      id,
+      update => {
+        setBoard(update.board);
+        setCurrentPlayer(update.currentPlayer);
+        setGameOver(update.isDraw || !!update.winner);
+        setWinner(update.winner ?? null);
+        setIsDraw(update.isDraw || false);
+        // update opponent if missing
+        if (update.players && update.players.length === 2) {
+          const opp = update.players.find((p) => p !== username);
+          if (opp) setOpponent(opp);
+        }
+      },
+      err => {
+        setMoveError("Socket error: " + err.message);
+      }
+    );
+  }, [username]);
+
+  // When entering a game view (gameId set), fetch (if not via create/join)
+  useEffect(() => {
+    if (view === 'game' && gameId && !board) {
+      api.fetchGame(gameId)
+        .then(g =>
+          setBoard(g.board)
+        )
+        .catch(() => {});
+      setupRealtime(gameId, yourSymbol);
+    }
+    // eslint-disable-next-line
+  }, [view, gameId, yourSymbol]);
 
   return (
     <div className="App">
@@ -140,13 +220,12 @@ function App() {
           {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
         </button>
       </header>
-      {/* Routing between features */}
       {view === 'login' && (
         <LoginSignup onLogin={handleLogin} />
       )}
       {view === 'lobby' && (
         <Lobby
-          games={games}
+          games={loadingGames ? [] : games}
           joinGame={handleJoinGame}
           createGame={handleCreateGame}
           username={username}
@@ -166,15 +245,16 @@ function App() {
               </div>
             </div>
             <GameBoard
-              board={board}
+              board={board || [[null, null, null], [null, null, null], [null, null, null]]}
               onMove={handleMove}
-              disabled={gameOver || currentPlayer !== yourSymbol}
-              currentPlayer={currentPlayer}
-              yourSymbol={yourSymbol}
+              disabled={gameOver || currentPlayer !== yourSymbol || waiting}
+              currentPlayer={currentPlayer || 'X'}
+              yourSymbol={yourSymbol || 'X'}
             />
+            {moveError && <div style={{ color: 'var(--accent)', marginTop: 8 }}>{moveError}</div>}
             <div className="action-buttons">
-              <button className="btn" onClick={handleRematch}>Reset Board</button>
-              <button className="btn" onClick={goToLobby} >Lobby</button>
+              <button className="btn" onClick={handleRematch} disabled={waiting}>Reset Board</button>
+              <button className="btn" onClick={goToLobby} disabled={waiting}>Lobby</button>
             </div>
           </div>
           <GameHistorySidebar history={history} onSelectGame={handleSelectHistory} />

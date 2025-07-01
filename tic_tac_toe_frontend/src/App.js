@@ -1,130 +1,194 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
-// PUBLIC_INTERFACE
-function PlayerInfo({ player, isActive }) {
-  /** 
-   * Player information box for horizontal layout.
-   * @param {player} Object with player details
-   * @param {isActive} boolean to highlight the active player
-   */
-  return (
-    <div className={`player-info${isActive ? ' active' : ''}`}>
-      <span className="player-avatar">{player.symbol}</span>
-      <span className="player-name">{player.name}</span>
-    </div>
-  );
-}
+// Import modular feature components
+import LoginSignup from './components/LoginSignup';
+import Lobby from './components/Lobby';
+import GameBoard from './components/GameBoard';
+import GameOverScreen from './components/GameOverScreen';
+import GameHistorySidebar from './components/GameHistorySidebar';
 
-// PUBLIC_INTERFACE
-function GameBoard({ board }) {
-  /** 
-   * Tic Tac Toe 3x3 Board; statically rendered for structure (real game logic later)
-   * @param {board} 2D array [row][col]
-   */
-  return (
-    <div className="game-board">
-      {board.map((row, i) => (
-        <div key={i} className="board-row">
-          {row.map((cell, j) => (
-            <div key={j} className="board-cell">{cell}</div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
 
-// PUBLIC_INTERFACE
-function ActionButtons() {
-  /** 
-   * Action buttons beneath the board (static structure, real actions later)
-   */
-  return (
-    <div className="action-buttons">
-      <button className="btn primary">New Game</button>
-      <button className="btn">Reset Board</button>
-      <button className="btn">History</button>
-    </div>
-  );
-}
 
-// PUBLIC_INTERFACE
-function GameHistorySidebar({ history }) {
-  /**
-   * Sidebar listing game history.
-   * @param {history} Array of game/history entries
-   */
-  return (
-    <aside className="sidebar">
-      <div className="sidebar-title">Game History</div>
-      <ul className="history-list">
-        {history.map((item, idx) => (
-          <li key={idx} className="history-item">{item}</li>
-        ))}
-      </ul>
-    </aside>
-  );
-}
-
-// PUBLIC_INTERFACE
+/**
+ * Application shell for Tic Tac Toe frontend.
+ * Now uses modular components: LoginSignup, Lobby, GameBoard, GameOverScreen, GameHistorySidebar
+ */
 function App() {
-  /**
-   * Application shell for the Tic Tac Toe frontend.
-   * Centers the game, provides sidebar, theme toggle, and minimal layout.
-   */
+  // App-level view state
   const [theme, setTheme] = useState('light');
-
-  // Demo state for structure only
-  const [board] = useState([
+  const [username, setUsername] = useState(null);
+  const [view, setView] = useState('login'); // 'login', 'lobby', 'game', 'gameover'
+  const [games, setGames] = useState([
+    // Demo game lobbies
+    { id: 1, name: "Room123", host: "Alice", status: "waiting" },
+    { id: 2, name: "ProTic", host: "Bob", status: "in_progress" }
+  ]);
+  const [yourSymbol, setYourSymbol] = useState("X");
+  const [opponent, setOpponent] = useState("Bob");
+  const [board, setBoard] = useState([
     [null, 'X', 'O'],
     ['O', 'X', null],
     [null, null, 'X']
   ]);
-  const players = [
-    { name: 'Player 1', symbol: '❌' },
-    { name: 'Player 2', symbol: '⭕' }
-  ];
-  const [activePlayer] = useState(0);
-  const [history] = useState([
-    "You defeated Alice (3-2)",
-    "Draw with Bob (board full)",
-    "You lost to Carol (1-3)",
+  const [currentPlayer, setCurrentPlayer] = useState("X");
+  const [gameOver, setGameOver] = useState(false);
+  const [winner, setWinner] = useState(null); // "X" or "O"
+  const [isDraw, setIsDraw] = useState(false);
+
+  // Demo history for sidebar
+  const [history, setHistory] = useState([
+    { opponent: "Alice", result: "Win", date: "2024-04-01" },
+    { opponent: "Bob", result: "Draw", date: "2024-04-02" },
+    { opponent: "Carol", result: "Loss", date: "2024-04-03" },
   ]);
 
-  // Effect to apply theme to document element
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // PUBLIC_INTERFACE
+  // Handler: Theme toggle
   const toggleTheme = () => {
     setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  };
+
+  // Handler: On login/signup
+  const handleLogin = (uname) => {
+    setUsername(uname);
+    setView('lobby');
+  };
+
+  // Handler: Create new game
+  const handleCreateGame = (roomName) => {
+    const newId = Math.floor(Math.random() * 99999);
+    setGames(g => [...g, { id: newId, name: roomName, host: username, status: "waiting" }]);
+    setView('game');
+    setYourSymbol("X");
+    setOpponent("Awaiting Opponent");
+    setBoard([
+      [null, null, null],
+      [null, null, null],
+      [null, null, null]
+    ]);
+    setCurrentPlayer("X");
+    setGameOver(false); setWinner(null); setIsDraw(false);
+  };
+
+  // Handler: Join game
+  const handleJoinGame = (gameId) => {
+    setView('game');
+    setYourSymbol("O");
+    const g = games.find(game => game.id === gameId);
+    setOpponent(g ? g.host : "X-player");
+    setBoard([
+      [null, null, null],
+      [null, null, null],
+      [null, null, null]
+    ]);
+    setCurrentPlayer("X");
+    setGameOver(false); setWinner(null); setIsDraw(false);
+  };
+
+  // Handler: Move input (for demo only)
+  const handleMove = (i, j) => {
+    if (gameOver || board[i][j]) return;
+    const newBoard = board.map(row => row.slice());
+    newBoard[i][j] = currentPlayer;
+    setBoard(newBoard);
+    // fake rules for demo: next player, set gameOver if full
+    const nextPlayer = currentPlayer === "X" ? "O" : "X";
+    setCurrentPlayer(nextPlayer);
+    if (newBoard.flat().filter(Boolean).length >= 5) {
+      setGameOver(true);
+      // fake outcome for demo
+      setWinner(currentPlayer);
+    }
+  };
+
+  // Handler: Go to Lobby
+  const goToLobby = () => setView('lobby');
+
+  // Handler: New Game from Game Over
+  const handleRematch = () => {
+    setBoard([
+      [null, null, null],
+      [null, null, null],
+      [null, null, null]
+    ]);
+    setCurrentPlayer("X");
+    setGameOver(false);
+    setWinner(null);
+    setIsDraw(false);
+    setView('game');
+  };
+
+  // Handler: Select game in history (no-op demo)
+  const handleSelectHistory = (game) => {
+    // could show a modal with moves
+    alert(`Viewing game: ${game.result} vs ${game.opponent} (${game.date})`);
   };
 
   return (
     <div className="App">
       <header className="app-title">
         <span className="brand-accent">TicTacTrace</span>
-        <button 
-          className="theme-toggle" 
+        <button
+          className="theme-toggle"
           onClick={toggleTheme}
           aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
         >
           {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
         </button>
       </header>
-      <div className="main-container">
-        <div className="central-content">
-          <div className="players-row">
-            <PlayerInfo player={players[0]} isActive={activePlayer === 0} />
-            <PlayerInfo player={players[1]} isActive={activePlayer === 1} />
+      {/* Routing between features */}
+      {view === 'login' && (
+        <LoginSignup onLogin={handleLogin} />
+      )}
+      {view === 'lobby' && (
+        <Lobby
+          games={games}
+          joinGame={handleJoinGame}
+          createGame={handleCreateGame}
+          username={username}
+        />
+      )}
+      {view === 'game' && (
+        <div className="main-container">
+          <div className="central-content">
+            <div className="players-row">
+              <div className={`player-info${currentPlayer === yourSymbol ? ' active' : ''}`}>
+                <span className="player-avatar">{yourSymbol === 'X' ? '❌' : '⭕'}</span>
+                <span className="player-name">{username} (You)</span>
+              </div>
+              <div className={`player-info${currentPlayer !== yourSymbol ? ' active' : ''}`}>
+                <span className="player-avatar">{yourSymbol === 'X' ? '⭕' : '❌'}</span>
+                <span className="player-name">{opponent}</span>
+              </div>
+            </div>
+            <GameBoard
+              board={board}
+              onMove={handleMove}
+              disabled={gameOver || currentPlayer !== yourSymbol}
+              currentPlayer={currentPlayer}
+              yourSymbol={yourSymbol}
+            />
+            <div className="action-buttons">
+              <button className="btn" onClick={handleRematch}>Reset Board</button>
+              <button className="btn" onClick={goToLobby} >Lobby</button>
+            </div>
           </div>
-          <GameBoard board={board} />
-          <ActionButtons />
+          <GameHistorySidebar history={history} onSelectGame={handleSelectHistory} />
+          {gameOver &&
+            <GameOverScreen
+              winner={winner}
+              isDraw={isDraw}
+              yourSymbol={yourSymbol}
+              onNewGame={handleRematch}
+              onLobby={goToLobby}
+            />
+          }
         </div>
-        <GameHistorySidebar history={history} />
-      </div>
+      )}
     </div>
   );
 }
